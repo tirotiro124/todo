@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Todo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #eef0f5;
+      --surface:      #ffffff;
+      --surface2:     #f6f7fb;
+      --text:         #1a1a2e;
+      --text-muted:   #9ca3af;
+      --border:       #e5e7eb;
+      --accent:       #6366f1;
+      --accent-dim:   #eef2ff;
+      --danger:       #ef4444;
+      --shadow:       0 4px 32px rgba(0,0,0,.08);
+      --radius:       14px;
+      --ease:         0.18s ease;
+    }
+
+    [data-theme="dark"] {
+      --bg:           #0f172a;
+      --surface:      #1e293b;
+      --surface2:     #162032;
+      --text:         #f1f5f9;
+      --text-muted:   #64748b;
+      --border:       #334155;
+      --accent:       #818cf8;
+      --accent-dim:   #1e1b4b;
+      --danger:       #f87171;
+      --shadow:       0 4px 32px rgba(0,0,0,.4);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                   'Hiragino Sans', 'Noto Sans JP', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 52px 16px 80px;
+      transition: background var(--ease), color var(--ease);
+    }
+
+    .app { width: 100%; max-width: 560px; }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+    }
+
+    .title {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -.5px;
+      background: linear-gradient(135deg, var(--accent) 30%, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .theme-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      width: 42px; height: 42px;
+      cursor: pointer;
+      font-size: 19px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--shadow);
+      transition: transform var(--ease), box-shadow var(--ease);
+    }
+    .theme-btn:hover { transform: scale(1.12) rotate(12deg); }
+
+    /* ── Card ───────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    /* ── Input row ──────────────────────────────────────── */
+    .input-row {
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .toggle-all-btn {
+      background: none; border: none;
+      color: var(--text-muted);
+      cursor: pointer; padding: 4px;
+      display: flex; align-items: center;
+      flex-shrink: 0;
+      transition: color var(--ease), transform var(--ease);
+    }
+    .toggle-all-btn.all-done { color: var(--accent); }
+    .toggle-all-btn:hover    { color: var(--accent); transform: scale(1.15); }
+
+    .new-todo {
+      flex: 1;
+      border: none; outline: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 15.5px;
+      padding: 18px 0;
+      font-family: inherit;
+    }
+    .new-todo::placeholder { color: var(--text-muted); }
+
+    /* ── Todo list ──────────────────────────────────────── */
+    .todo-list { list-style: none; }
+
+    .todo-item {
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      transition: background var(--ease);
+      animation: slidein .15s ease both;
+      cursor: grab;
+    }
+    .todo-item:last-child { border-bottom: none; }
+    .todo-item:hover      { background: var(--surface2); }
+    .todo-item.dragging   { opacity: .45; cursor: grabbing; }
+    .todo-item.drag-over  { background: var(--accent-dim); }
+
+    @keyframes slidein {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* checkbox */
+    .check-btn {
+      background: none;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      width: 22px; height: 22px;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+      transition: background var(--ease), border-color var(--ease),
+                  transform var(--ease);
+    }
+    .check-btn:hover                    { border-color: var(--accent); transform: scale(1.1); }
+    .todo-item.done .check-btn          { background: var(--accent); border-color: var(--accent); }
+
+    /* text */
+    .todo-label {
+      flex: 1;
+      font-size: 15px;
+      padding: 17px 0;
+      cursor: default;
+      word-break: break-word;
+      user-select: none;
+      transition: color var(--ease);
+    }
+    .todo-item.done .todo-label {
+      color: var(--text-muted);
+      text-decoration: line-through;
+    }
+
+    /* edit input */
+    .edit-input {
+      flex: 1;
+      border: 2px solid var(--accent);
+      border-radius: 7px;
+      padding: 7px 10px;
+      font-size: 15px;
+      font-family: inherit;
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+      margin: 9px 0;
+    }
+
+    /* delete */
+    .del-btn {
+      background: none; border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 22px; line-height: 1;
+      padding: 2px 6px;
+      opacity: 0;
+      flex-shrink: 0;
+      transition: opacity var(--ease), transform var(--ease);
+    }
+    .todo-item:hover .del-btn { opacity: 1; }
+    .del-btn:hover             { transform: scale(1.25); }
+
+    /* ── Empty state ────────────────────────────────────── */
+    .empty {
+      padding: 48px 16px;
+      text-align: center;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .empty svg   { opacity: .35; margin-bottom: 10px; }
+    .empty p     { font-size: 14px; }
+
+    /* ── Footer ─────────────────────────────────────────── */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text-muted);
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .item-count { flex-shrink: 0; }
+
+    .filters { display: flex; gap: 2px; }
+
+    .filter-btn {
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: inherit;
+      transition: all var(--ease);
+    }
+    .filter-btn:hover  { border-color: var(--border); color: var(--text); }
+    .filter-btn.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+    .clear-btn {
+      background: none; border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-family: inherit;
+      flex-shrink: 0;
+      transition: color var(--ease);
+    }
+    .clear-btn:hover { color: var(--danger); }
+
+    /* ── Hint ───────────────────────────────────────────── */
+    .hint {
+      margin-top: 14px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .hint kbd {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: monospace;
+      font-size: 11px;
+    }
+
+    /* ── Stats bar ──────────────────────────────────────── */
+    .stats {
+      margin-top: 16px;
+      display: flex;
+      gap: 10px;
+    }
+    .stat-pill {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      box-shadow: var(--shadow);
+    }
+    .stat-pill strong {
+      display: block;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .stat-pill.accent strong { color: var(--accent); }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <header class="header">
+    <h1 class="title">Todo</h1>
+    <button class="theme-btn" id="themeBtn" title="テーマ切替">🌙</button>
+  </header>
+
+  <!-- Stats pills -->
+  <div class="stats" id="stats">
+    <div class="stat-pill">
+      <strong id="statTotal">0</strong>
+      合計
+    </div>
+    <div class="stat-pill accent">
+      <strong id="statActive">0</strong>
+      未完了
+    </div>
+    <div class="stat-pill">
+      <strong id="statDone">0</strong>
+      完了済み
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <!-- Input -->
+    <div class="input-row">
+      <button class="toggle-all-btn" id="toggleAllBtn" title="すべて切替" style="display:none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </button>
+      <input class="new-todo" id="newTodo" type="text"
+             placeholder="やることを入力して Enter…" autocomplete="off" />
+    </div>
+
+    <!-- List -->
+    <ul class="todo-list" id="todoList"></ul>
+
+    <!-- Footer -->
+    <div class="footer" id="footer" style="display:none">
+      <span class="item-count" id="itemCount"></span>
+      <div class="filters">
+        <button class="filter-btn active" data-filter="all">すべて</button>
+        <button class="filter-btn" data-filter="active">未完了</button>
+        <button class="filter-btn" data-filter="completed">完了済み</button>
+      </div>
+      <button class="clear-btn" id="clearBtn">完了済みを削除</button>
+    </div>
+  </div>
+
+  <p class="hint">
+    ダブルクリックで編集 &nbsp;|&nbsp;
+    <kbd>Enter</kbd> 追加・確定 &nbsp;|&nbsp;
+    <kbd>Esc</kbd> キャンセル &nbsp;|&nbsp;
+    ドラッグで並び替え
+  </p>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let todos    = JSON.parse(localStorage.getItem('todos') || '[]')
+let filter   = localStorage.getItem('filter') || 'all'
+let editId   = null
+let dragSrc  = null
+
+// ── Refs ───────────────────────────────────────────────────────────────────────
+const $id  = id => document.getElementById(id)
+const themeBtn    = $id('themeBtn')
+const newTodoEl   = $id('newTodo')
+const listEl      = $id('todoList')
+const footerEl    = $id('footer')
+const itemCountEl = $id('itemCount')
+const clearBtn    = $id('clearBtn')
+const toggleAllBtn= $id('toggleAllBtn')
+const filterBtns  = document.querySelectorAll('.filter-btn')
+
+// ── Persist ────────────────────────────────────────────────────────────────────
+function save() {
+  localStorage.setItem('todos', JSON.stringify(todos))
+  localStorage.setItem('filter', filter)
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function uid() {
+  return (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : Date.now().toString(36) + Math.random().toString(36).slice(2)
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
+function visible() {
+  if (filter === 'active')    return todos.filter(t => !t.completed)
+  if (filter === 'completed') return todos.filter(t =>  t.completed)
+  return todos
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────────
+const CHECK_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+  stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="20 6 9 17 4 12"/>
+</svg>`
+
+const EMPTY_SVG = `<svg width="52" height="52" viewBox="0 0 24 24" fill="none"
+  stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="3" width="18" height="18" rx="3.5"/>
+  <line x1="9" y1="9"  x2="15" y2="9"/>
+  <line x1="9" y1="13" x2="15" y2="13"/>
+  <line x1="9" y1="17" x2="12" y2="17"/>
+</svg>`
+
+function render() {
+  const shown   = visible()
+  const active  = todos.filter(t => !t.completed).length
+  const done    = todos.filter(t =>  t.completed).length
+  const total   = todos.length
+  const allDone = total > 0 && active === 0
+
+  // Stats
+  $id('statTotal').textContent  = total
+  $id('statActive').textContent = active
+  $id('statDone').textContent   = done
+
+  // Footer / toggle-all visibility
+  footerEl.style.display       = total > 0 ? '' : 'none'
+  toggleAllBtn.style.display   = total > 0 ? '' : 'none'
+  toggleAllBtn.classList.toggle('all-done', allDone)
+  itemCountEl.textContent      = `${active} 件残り`
+  clearBtn.style.display       = done > 0 ? '' : 'none'
+
+  // Filter btn active state
+  filterBtns.forEach(b => b.classList.toggle('active', b.dataset.filter === filter))
+
+  // List
+  if (shown.length === 0) {
+    const msg = filter === 'completed' ? '完了済みのタスクはありません'
+              : filter === 'active'    ? '未完了のタスクはありません'
+              :                          'タスクを追加してください'
+    listEl.innerHTML = `
+      <li class="empty">
+        ${EMPTY_SVG}
+        <p>${msg}</p>
+      </li>`
+    return
+  }
+
+  listEl.innerHTML = shown.map(t => `
+    <li class="todo-item${t.completed ? ' done' : ''}" data-id="${t.id}" draggable="true">
+      <button class="check-btn" data-action="toggle" data-id="${t.id}">
+        ${t.completed ? CHECK_SVG : ''}
+      </button>
+      ${editId === t.id
+        ? `<input class="edit-input" data-id="${t.id}" value="${esc(t.text)}" />`
+        : `<span class="todo-label">${esc(t.text)}</span>`
+      }
+      <button class="del-btn" data-action="delete" data-id="${t.id}" title="削除">×</button>
+    </li>`
+  ).join('')
+
+  if (editId) {
+    const inp = listEl.querySelector('.edit-input')
+    if (inp) { inp.focus(); inp.select() }
+  }
+}
+
+// ── Actions ────────────────────────────────────────────────────────────────────
+function addTodo(text) {
+  text = text.trim()
+  if (!text) return
+  todos.push({ id: uid(), text, completed: false, createdAt: Date.now() })
+  save(); render()
+}
+
+function toggleTodo(id) {
+  const t = todos.find(t => t.id === id)
+  if (t) { t.completed = !t.completed; save(); render() }
+}
+
+function deleteTodo(id) {
+  todos = todos.filter(t => t.id !== id)
+  if (editId === id) editId = null
+  save(); render()
+}
+
+function startEdit(id) { editId = id; render() }
+
+function commitEdit(id, val) {
+  const text = val.trim()
+  if (text) {
+    const t = todos.find(t => t.id === id)
+    if (t) t.text = text
+    save()
+  } else {
+    todos = todos.filter(t => t.id !== id)
+    save()
+  }
+  editId = null; render()
+}
+
+function cancelEdit() { editId = null; render() }
+
+function toggleAll() {
+  const allDone = todos.every(t => t.completed)
+  todos.forEach(t => t.completed = !allDone)
+  save(); render()
+}
+
+function clearCompleted() {
+  todos = todos.filter(t => !t.completed)
+  save(); render()
+}
+
+// ── Event wiring ───────────────────────────────────────────────────────────────
+
+// New todo — Enter to add
+newTodoEl.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return
+  addTodo(newTodoEl.value)
+  newTodoEl.value = ''
+})
+
+// List — delegated clicks
+listEl.addEventListener('click', e => {
+  const btn = e.target.closest('[data-action]')
+  if (!btn) return
+  const { action, id } = btn.dataset
+  if (action === 'toggle') toggleTodo(id)
+  if (action === 'delete') deleteTodo(id)
+})
+
+// List — double-click to edit (on label or list item)
+listEl.addEventListener('dblclick', e => {
+  const item = e.target.closest('.todo-item')
+  if (!item || e.target.closest('.check-btn, .del-btn, .edit-input')) return
+  if (item.classList.contains('done')) return   // skip editing completed
+  startEdit(item.dataset.id)
+})
+
+// Edit input — keyboard
+listEl.addEventListener('keydown', e => {
+  if (!e.target.classList.contains('edit-input')) return
+  if (e.key === 'Enter')  commitEdit(e.target.dataset.id, e.target.value)
+  if (e.key === 'Escape') cancelEdit()
+})
+
+// Edit input — blur to commit
+listEl.addEventListener('focusout', e => {
+  if (e.target.classList.contains('edit-input')) {
+    // Tiny timeout so click events on other targets fire first
+    setTimeout(() => {
+      if (editId && document.activeElement !== e.target) {
+        commitEdit(e.target.dataset.id, e.target.value)
+      }
+    }, 100)
+  }
+})
+
+// Filters
+filterBtns.forEach(b => b.addEventListener('click', () => {
+  filter = b.dataset.filter; save(); render()
+}))
+
+// Toggle all / Clear completed
+toggleAllBtn.addEventListener('click', toggleAll)
+clearBtn.addEventListener('click', clearCompleted)
+
+// ── Drag & drop reorder ────────────────────────────────────────────────────────
+listEl.addEventListener('dragstart', e => {
+  const item = e.target.closest('.todo-item')
+  if (!item) return
+  dragSrc = item.dataset.id
+  e.dataTransfer.effectAllowed = 'move'
+  setTimeout(() => item.classList.add('dragging'), 0)
+})
+
+listEl.addEventListener('dragend', e => {
+  e.target.closest('.todo-item')?.classList.remove('dragging')
+  listEl.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'))
+  dragSrc = null
+})
+
+listEl.addEventListener('dragover', e => {
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+  const item = e.target.closest('.todo-item')
+  if (!item || item.dataset.id === dragSrc) return
+  listEl.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'))
+  item.classList.add('drag-over')
+})
+
+listEl.addEventListener('dragleave', e => {
+  e.target.closest('.todo-item')?.classList.remove('drag-over')
+})
+
+listEl.addEventListener('drop', e => {
+  e.preventDefault()
+  const tgt = e.target.closest('.todo-item')
+  if (!tgt || !dragSrc || tgt.dataset.id === dragSrc) return
+
+  // Reorder in the underlying `todos` array using the visible order
+  const shown   = visible()
+  const srcIdx  = todos.findIndex(t => t.id === dragSrc)
+  const tgtVis  = shown.findIndex(t => t.id === tgt.dataset.id)
+  const tgtId   = shown[tgtVis]?.id
+
+  if (srcIdx === -1 || !tgtId) return
+  const tgtIdx = todos.findIndex(t => t.id === tgtId)
+  const [moved] = todos.splice(srcIdx, 1)
+  todos.splice(tgtIdx, 0, moved)
+  save(); render()
+})
+
+// ── Theme ──────────────────────────────────────────────────────────────────────
+const html = document.documentElement
+const initTheme = localStorage.getItem('theme') || 'light'
+html.dataset.theme = initTheme
+themeBtn.textContent = initTheme === 'dark' ? '☀️' : '🌙'
+
+themeBtn.addEventListener('click', () => {
+  const next = html.dataset.theme === 'dark' ? 'light' : 'dark'
+  html.dataset.theme = next
+  themeBtn.textContent = next === 'dark' ? '☀️' : '🌙'
+  localStorage.setItem('theme', next)
+})
+
+// ── Boot ───────────────────────────────────────────────────────────────────────
+render()
+newTodoEl.focus()
+</script>
+</body>
+</html>
