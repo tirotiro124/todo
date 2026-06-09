@@ -296,6 +296,90 @@
       line-height: 1.2;
     }
     .stat-pill.accent strong { color: var(--accent); }
+
+    /* ── Weather ────────────────────────────────────────── */
+    .weather {
+      margin-top: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px 18px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .weather-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .weather-location {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .weather-current {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .weather-icon { font-size: 36px; line-height: 1; }
+
+    .weather-temp {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .weather-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .weather-forecast {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .forecast-day {
+      flex: 1;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .forecast-day .f-icon { font-size: 20px; margin: 4px 0; }
+
+    .forecast-day .f-temps {
+      display: flex;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .forecast-day .f-max { color: var(--text); font-weight: 600; }
+
+    .weather-loading {
+      text-align: center;
+      padding: 20px 0;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .weather-error {
+      text-align: center;
+      padding: 12px 0;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -356,6 +440,11 @@
     <kbd>Esc</kbd> キャンセル &nbsp;|&nbsp;
     ドラッグで並び替え
   </p>
+
+  <!-- Weather widget -->
+  <div class="weather" id="weather">
+    <div class="weather-loading">📡 天気を取得中…</div>
+  </div>
 
 </div>
 
@@ -631,6 +720,81 @@ themeBtn.addEventListener('click', () => {
 // ── Boot ───────────────────────────────────────────────────────────────────────
 render()
 newTodoEl.focus()
+initWeather()
+
+// ── Weather ────────────────────────────────────────────────────────────────────
+const WMO = {
+  0:  ['☀️', '快晴'],
+  1:  ['🌤️', 'ほぼ晴れ'], 2: ['⛅', '部分曇り'], 3: ['☁️', '曇り'],
+  45: ['🌫️', '霧'], 48: ['🌫️', '霧氷'],
+  51: ['🌦️', '霧雨(弱)'], 53: ['🌦️', '霧雨'], 55: ['🌦️', '霧雨(強)'],
+  61: ['🌧️', '小雨'], 63: ['🌧️', '雨'], 65: ['🌧️', '大雨'],
+  71: ['🌨️', '小雪'], 73: ['🌨️', '雪'], 75: ['🌨️', '大雪'],
+  77: ['🌨️', '霰'],
+  80: ['🌧️', 'にわか雨(弱)'], 81: ['🌧️', 'にわか雨'], 82: ['🌧️', 'にわか雨(強)'],
+  85: ['🌨️', 'にわか雪'], 86: ['🌨️', 'にわか雪(強)'],
+  95: ['⛈️', '雷雨'], 96: ['⛈️', '雷雨+雹'], 99: ['⛈️', '雷雨+雹(強)'],
+}
+
+const DAYS = ['日', '月', '火', '水', '木', '金', '土']
+
+function wmo(code) { return WMO[code] || ['🌡️', '不明'] }
+
+async function initWeather() {
+  const el = $id('weather')
+  if (!navigator.geolocation) {
+    el.innerHTML = '<div class="weather-error">位置情報が利用できません</div>'
+    return
+  }
+  navigator.geolocation.getCurrentPosition(async pos => {
+    try {
+      const { latitude: lat, longitude: lon } = pos.coords
+      const [weatherRes, geoRes] = await Promise.all([
+        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode,windspeed_10m&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&forecast_days=4`),
+        fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=ja`)
+      ])
+      const weather = await weatherRes.json()
+      const geo     = await geoRes.json()
+
+      const cur   = weather.current
+      const daily = weather.daily
+      const [icon, desc] = wmo(cur.weathercode)
+      const city  = geo.address?.city || geo.address?.town || geo.address?.village || geo.address?.county || '現在地'
+
+      const forecastHTML = [1, 2, 3].map(i => {
+        const date  = new Date(daily.time[i])
+        const [fi]  = wmo(daily.weathercode[i])
+        return `
+          <div class="forecast-day">
+            <div>${DAYS[date.getDay()]}曜</div>
+            <div class="f-icon">${fi}</div>
+            <div class="f-temps">
+              <span class="f-max">${Math.round(daily.temperature_2m_max[i])}°</span>
+              <span>/${Math.round(daily.temperature_2m_min[i])}°</span>
+            </div>
+          </div>`
+      }).join('')
+
+      el.innerHTML = `
+        <div class="weather-header">
+          <span class="weather-location">📍 ${city}</span>
+          <span class="weather-location">💨 ${Math.round(cur.windspeed_10m)} km/h</span>
+        </div>
+        <div class="weather-current">
+          <span class="weather-icon">${icon}</span>
+          <div>
+            <div class="weather-temp">${Math.round(cur.temperature_2m)}°C</div>
+            <div class="weather-desc">${desc}</div>
+          </div>
+        </div>
+        <div class="weather-forecast">${forecastHTML}</div>`
+    } catch {
+      el.innerHTML = '<div class="weather-error">天気の取得に失敗しました</div>'
+    }
+  }, () => {
+    el.innerHTML = '<div class="weather-error">位置情報の許可が必要です</div>'
+  })
+}
 </script>
 </body>
 </html>
